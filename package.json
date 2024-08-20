@@ -2,7 +2,7 @@
     "name": "sidebar-resizer",
     "displayName": "Sidebar Resizer",
     "description": "Automatically resize editor and sidebars to specified proportions",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "repository": {
         "type": "git",
         "url": "https://github.com/raghavendra-talur/sidebar-resizer"

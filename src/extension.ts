@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('workbench.action.focusAuxiliaryBar');
         await vscode.commands.executeCommand('workbench.action.focusLastEditorGroup');
 
-        await resizeEditor(windowWidth * .8, "editor");
+        await resizeEditor(windowWidth * .9, "editor");
         await resizeEditor(targetEditorWidth, "sidebar");
         await resizeEditor(targetEditorWidth, "auxiliaryBar");
 
@@ -32,8 +32,9 @@ async function resizeEditor(targetWidth: number, sidebar?: "sidebar" | "auxiliar
     const currentWidth = initialLayout.groups[0].size;
     const difference = targetWidth - currentWidth;
 
-    // if absolute(difference) is less than 20px, do nothing
-    if (Math.abs(difference) <= 40) {
+    vscode.window.showInformationMessage(`Editor is ${currentWidth}px`);
+
+    if (Math.abs(difference) <= 60) {
         return;
     }
 
@@ -62,6 +63,16 @@ async function resizeEditor(targetWidth: number, sidebar?: "sidebar" | "auxiliar
     if (sidebar === "editor") {
         await vscode.commands.executeCommand('workbench.action.focusLastEditorGroup');
         await vscode.commands.executeCommand(command);
+
+        const newLayout = await vscode.commands.executeCommand('vscode.getEditorLayout') as any;
+        if (!newLayout || !newLayout.groups || newLayout.groups.length === 0) {
+            return;
+        }
+
+        if (newLayout.groups[0].size === currentWidth) {
+            return;
+        }
+
         await resizeEditor(targetWidth, "editor");
     }
 
