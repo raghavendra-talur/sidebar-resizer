@@ -16,7 +16,7 @@ export function activate(context: vscode.ExtensionContext) {
         await resizeEditor(targetEditorWidth, "sidebar");
         await resizeEditor(targetEditorWidth, "auxiliaryBar");
 
-        vscode.window.showInformationMessage(`Editor resized to ${targetEditorWidth}px, sidebars adjusted accordingly`);
+        console.log(`Editor resized to ${targetEditorWidth}px, sidebars adjusted accordingly`);
     });
 
     context.subscriptions.push(disposable);
@@ -32,9 +32,9 @@ async function resizeEditor(targetWidth: number, sidebar?: "sidebar" | "auxiliar
     const currentWidth = initialLayout.groups[0].size;
     const difference = targetWidth - currentWidth;
 
-    vscode.window.showInformationMessage(`Editor is ${currentWidth}px`);
+    console.log(`Editor is ${currentWidth}px`);
 
-    if (Math.abs(difference) <= 60) {
+    if (Math.abs(difference) < 60) {
         return;
     }
 
