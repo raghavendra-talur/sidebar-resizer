@@ -2,27 +2,24 @@ import * as vscode from 'vscode';
 
 const CONFIG_SECTION = 'sidebarResizer';
 const DEFAULT_EDITOR_WIDTH = 1280;
-const INITIAL_RESET_WIDTH = 3840;
 const MAX_DIFFERENCE_THRESHOLD = 60;
 const MAX_RESIZE_ATTEMPTS = 50;
+const PROBE_MAX_WIDTH = 10000; // A large number to probe maximum possible width
 
-/**
- * Activates the VS Code extension.
- * Registers a command that adjusts the editor layout to a configured target width.
- */
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Sidebar Resizer is now active!');
 
     const disposable = vscode.commands.registerCommand('sidebarResizer.resize', async () => {
         try {
             const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
             const targetEditorWidth = config.get<number>('editorWidth') ?? DEFAULT_EDITOR_WIDTH;
-            
-            // Focus the UI elements to ensure resizing commands affect the correct parts.
-            await focusLayoutElements();
 
-            // First, reset the layout to a known large width, then adjust to the target width.
-            await resizeEditor(INITIAL_RESET_WIDTH);
+            // First, determine the maximum possible width by probing.
+            const initialWidth = await determineInitialWidth();
+
+            console.log(`Determined initial maximum width: ${initialWidth}px`);
+
+            // Now resize from that maximum down (or up) to the target width.
             await resizeEditor(targetEditorWidth);
 
             console.log(`Editor resized to approximately ${targetEditorWidth}px.`);
@@ -34,27 +31,25 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(disposable);
 }
 
-/**
- * Deactivate the extension. Currently no cleanup is needed.
- */
 export function deactivate() {}
 
 /**
- * Attempts to resize the editor to the given target width by repeatedly adjusting the view size.
- * This function uses a loop with a maximum number of attempts to prevent infinite loops.
+ * Attempts to resize the editor to a given target width. This is done by repeatedly issuing
+ * increase/decrease commands until the desired width (within a threshold) is reached or
+ * we hit the maximum number of attempts.
  */
 async function resizeEditor(targetWidth: number) {
     for (let attempt = 0; attempt < MAX_RESIZE_ATTEMPTS; attempt++) {
         const currentLayout = await getEditorLayout();
         if (!currentLayout) return;
-        
+
         const currentWidth = currentLayout.groups[0].size;
         const difference = targetWidth - currentWidth;
-        const isCloseEnough = Math.abs(difference) <= MAX_DIFFERENCE_THRESHOLD;
 
-        console.log(`Current width: ${currentWidth}px, Target width: ${targetWidth}px, Difference: ${difference}px`);
+        console.log(`Attempt ${attempt+1}: Current width: ${currentWidth}px, Target: ${targetWidth}px, Diff: ${difference}px`);
 
-        if (isCloseEnough) {
+        if (Math.abs(difference) <= MAX_DIFFERENCE_THRESHOLD) {
+            // Close enough to the target width
             break;
         }
 
@@ -62,15 +57,32 @@ async function resizeEditor(targetWidth: number) {
             ? 'workbench.action.decreaseViewSize' 
             : 'workbench.action.increaseViewSize';
 
-        // To apply changes properly, focus the relevant UI elements before resizing.
         await focusLayoutElements();
         await vscode.commands.executeCommand(command);
     }
 }
 
 /**
- * Focuses the sidebar and auxiliary bar so that size commands know which panels to resize.
- * Then focuses back to the last editor group to ensure the resizing commands are applied correctly.
+ * Determines a baseline "maximum" width by attempting to set the editor width to a very large value.
+ * After we try to stretch the layout, we record the resulting width. This gives us a dynamic starting point
+ * instead of relying on a hard-coded reset width.
+ */
+async function determineInitialWidth(): Promise<number> {
+    // Try resizing to an extremely large width, effectively "maxing out" what is possible.
+    await resizeEditor(PROBE_MAX_WIDTH);
+
+    const layout = await getEditorLayout();
+    if (!layout) {
+        throw new Error('Unable to determine the initial width.');
+    }
+
+    // The current editor size after attempting to set a large width can be considered our baseline max width.
+    return layout.groups[0].size;
+}
+
+/**
+ * Focuses the sidebar, auxiliary bar, and returns focus to the editor so that sizing commands target
+ * the correct elements.
  */
 async function focusLayoutElements() {
     await vscode.commands.executeCommand('workbench.action.focusSideBar');
@@ -79,8 +91,7 @@ async function focusLayoutElements() {
 }
 
 /**
- * Retrieves the current editor layout and validates that it has at least one group.
- * Returns `null` if the layout is not available.
+ * Retrieves the current editor layout. Returns null if we can't get a valid layout.
  */
 async function getEditorLayout() {
     const layout = await vscode.commands.executeCommand('vscode.getEditorLayout') as any;
